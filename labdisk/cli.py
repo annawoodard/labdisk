@@ -10,6 +10,8 @@ starts a scan.
   labdisk trim              candidates to delete or move, and why (never deletes)
   labdisk report            rewrite the Markdown reports now
 
+Add --binary to any of these to see sizes in TiB and GiB instead of TB and GB.
+
 Getting started:
 
   labdisk init              write a starter config (~/.config/labdisk/config.toml)
@@ -158,33 +160,37 @@ def cmd_schedule(cfg, args) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="labdisk", description=__doc__,
+    # Options every command accepts, before or after the command name.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--binary", action="store_true", default=argparse.SUPPRESS,
+                        help="print sizes in binary units (TiB, GiB) this time, whatever the config says")
+    parser = argparse.ArgumentParser(prog="labdisk", description=__doc__, parents=[common],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", type=os.path.expanduser, default=str(config_mod.DEFAULT_CONFIG),
                         help="configuration file (default: %(default)s)")
     sub = parser.add_subparsers(dest="command", metavar="command", help=argparse.SUPPRESS)
-    sub.add_parser("help", description="show this help")
-    sub.add_parser("status", description="how full each share is and how fast it is filling (default)")
-    p = sub.add_parser("top", description="largest top-level folders of one share")
+    sub.add_parser("help", parents=[common], description="show this help")
+    sub.add_parser("status", parents=[common], description="how full each share is and how fast it is filling (default)")
+    p = sub.add_parser("top", parents=[common], description="largest top-level folders of one share")
     p.add_argument("share")
     p.add_argument("-n", type=int, default=25)
-    p = sub.add_parser("mine", description="your largest folders on every share")
+    p = sub.add_parser("mine", parents=[common], description="your largest folders on every share")
     p.add_argument("-n", type=int, default=30)
-    p = sub.add_parser("grew", description="what grew most over the last N days")
+    p = sub.add_parser("grew", parents=[common], description="what grew most over the last N days")
     p.add_argument("--days", type=float, default=7)
     p.add_argument("-n", type=int, default=25)
-    p = sub.add_parser("trim", description="candidates to remove or move; never deletes")
+    p = sub.add_parser("trim", parents=[common], description="candidates to remove or move; never deletes")
     p.add_argument("-n", type=int, default=40)
-    sub.add_parser("report", description="rewrite the Markdown reports from saved results")
-    sub.add_parser("init", description="write a starter configuration file")
-    p = sub.add_parser("schedule", description="print the scrontab entries that keep results current")
+    sub.add_parser("report", parents=[common], description="rewrite the Markdown reports from saved results")
+    sub.add_parser("init", parents=[common], description="write a starter configuration file")
+    p = sub.add_parser("schedule", parents=[common], description="print the scrontab entries that keep results current")
     p.add_argument("--account", required=True, help="Slurm account to charge")
     p.add_argument("--partition", required=True)
     p.add_argument("--qos")
     # Subcommands carry a description (shown by `labdisk <command> -h`) but no `help`, so the
     # main help screen shows only the examples in this module's docstring.
-    sub.add_parser("tick", description="15-minute job: quota readings, big-file recheck, alerts, reports")
-    p = sub.add_parser("scan", description="daily job: scan due folders for up to --hours (Slurm only)")
+    sub.add_parser("tick", parents=[common], description="15-minute job: quota readings, big-file recheck, alerts, reports")
+    p = sub.add_parser("scan", parents=[common], description="daily job: scan due folders for up to --hours (Slurm only)")
     p.add_argument("--hours", type=float, required=True)
     p.add_argument("--share", action="append", help="limit to these shares")
     args = parser.parse_args(argv)
@@ -195,7 +201,7 @@ def main(argv: list[str] | None = None) -> None:
         cmd_init(args)
         return
     cfg = config_mod.load(config_mod.Path(args.config))
-    report.use_units(cfg.units)
+    report.use_units("binary" if getattr(args, "binary", False) else cfg.units)
     {"status": cmd_status, None: cmd_status, "top": cmd_top, "mine": cmd_mine, "grew": cmd_grew,
      "trim": cmd_trim, "report": cmd_report, "tick": cmd_tick, "scan": cmd_scan, "schedule": cmd_schedule}[args.command](cfg, args)
 
