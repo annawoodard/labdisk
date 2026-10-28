@@ -93,6 +93,7 @@ def scan_unit(path: str, mode: str, own_inherited: bool, owner_uid: int, min_row
             errors += 1
             return totals
         own = own_parent or folder_st.st_uid == owner_uid
+        totals[0] += folder_st.st_blocks * 512  # a directory's own blocks count against the quota too
         totals[3] = folder_st.st_mtime
         for entry in entries:
             throttle.tick()

@@ -27,6 +27,8 @@ def send(config: Config, subject: str, body: str) -> None:
 def check(config: Config, grew: list[dict]) -> list[str]:
     """Send whatever alerts are due; `grew` is this tick's big-file growth. Returns the subjects sent."""
     state_path = config.results / "alert_state.json"
+    if not config.email:
+        return []
     state = read_json(state_path, {})
     sent = []
     for share in config.shares:
