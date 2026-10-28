@@ -72,7 +72,7 @@ def quota_rows(config: Config, shares: list[Share]) -> list[list]:
     for share in shares:
         look = outlook(config, share.name)
         if not look:
-            rows.append([share.name] + ["no reading yet"] + [""] * 6)
+            rows.append([share.name, "no quota configured" if not share.quota else "no reading yet"] + [""] * 6)
             continue
         r = look["reading"]
         files = f"{r.files / 1e6:.2f} M" + (f" of {r.file_hard / 1e6:.2f} M" if r.file_hard else "")

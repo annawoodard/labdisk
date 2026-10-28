@@ -10,6 +10,12 @@ starts a scan.
   labdisk trim              candidates to delete or move, and why (never deletes)
   labdisk report            rewrite the Markdown reports now
 
+Getting started:
+
+  labdisk init              write a starter config (~/.config/labdisk/config.toml)
+  labdisk schedule --account A --partition P
+                            print the scrontab entries that keep results current
+
 The full report is report.md in the results directory named in your config.
 
 Scheduled from scrontab (you do not need to run these yourself):
@@ -22,6 +28,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
+import sys
 import time
 
 from . import alert, config as config_mod, quota, report, scan, trim
@@ -112,6 +120,30 @@ def cmd_report(cfg, args) -> None:
         print("wrote", path)
 
 
+def cmd_init(args) -> None:
+    path = config_mod.write_starter(config_mod.Path(args.config))
+    print(f"wrote {path}; edit its [[share]] entries, then run `labdisk tick` and `labdisk schedule`")
+
+
+def cmd_schedule(cfg, args) -> None:
+    """Print scrontab entries that run this installation of labdisk."""
+    exe = shutil.which("labdisk") or f"{sys.executable} -m labdisk"
+    where = f"--account={args.account} --partition={args.partition}" + (f" --qos={args.qos}" if args.qos else "")
+    config = f" --config {args.config}" if args.config != str(config_mod.DEFAULT_CONFIG) else ""
+    print(f"""# Add these to your Slurm cron table: run `scrontab -e` and paste them in.
+# labdisk: quota readings, big-file recheck, alerts and reports every 15 minutes.
+#SCRON {where} --job-name=labdisk_tick
+#SCRON --time=00:10:00 --mem=1G --cpus-per-task=1
+#SCRON --output={cfg.results}/tick.log --open-mode=append
+*/15 * * * * {exe}{config} tick
+
+# labdisk: scan due folders daily, for up to 23 hours with {cfg.readers} readers (one scan at a time).
+#SCRON {where} --job-name=labdisk_scan
+#SCRON --time=23:30:00 --mem=8G --cpus-per-task={cfg.readers}
+#SCRON --output={cfg.results}/scan-%j.log
+7 1 * * * {exe}{config} scan --hours 23""")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="labdisk", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -131,6 +163,11 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("trim", help="candidates to remove or move; never deletes")
     p.add_argument("-n", type=int, default=40)
     sub.add_parser("report", help="rewrite the Markdown reports from saved results")
+    sub.add_parser("init", help="write a starter configuration file")
+    p = sub.add_parser("schedule", help="print the scrontab entries that keep results current")
+    p.add_argument("--account", required=True, help="Slurm account to charge")
+    p.add_argument("--partition", required=True)
+    p.add_argument("--qos")
     sub.add_parser("tick", help="15-minute job: quota readings, big-file recheck, alerts, reports")
     p = sub.add_parser("scan", help="daily job: scan due folders for up to --hours (Slurm only)")
     p.add_argument("--hours", type=float, required=True)
@@ -139,9 +176,12 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "help":
         parser.print_help()
         return
+    if args.command == "init":
+        cmd_init(args)
+        return
     cfg = config_mod.load(config_mod.Path(args.config))
     {"status": cmd_status, None: cmd_status, "top": cmd_top, "mine": cmd_mine, "grew": cmd_grew,
-     "trim": cmd_trim, "report": cmd_report, "tick": cmd_tick, "scan": cmd_scan}[args.command](cfg, args)
+     "trim": cmd_trim, "report": cmd_report, "tick": cmd_tick, "scan": cmd_scan, "schedule": cmd_schedule}[args.command](cfg, args)
 
 
 if __name__ == "__main__":

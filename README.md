@@ -75,13 +75,22 @@ people's weekly.
 
 ## Setup
 
-Requires Python 3.11 or newer and nothing else. `mmlsquota` and `mail` must be on `PATH`.
+Written for a GPFS cluster with Slurm: quotas are read with `mmlsquota`, scans run as
+Slurm jobs, and alerts go out with `mail`. Requires Python 3.11 or newer and nothing
+else.
 
-1. Copy `examples/config.toml` to `~/.config/labdisk/config.toml` and edit it. Keep it
-   out of version control; it names your shares and accounts.
-2. Edit `examples/scrontab` (account, partition, Python path) and install it with
-   `scrontab`.
-3. Run `python -m labdisk tick` once to check the quota readings.
+```
+pip install --user git+https://github.com/annawoodard/labdisk   # or clone and pip install -e .
+labdisk init                     # writes ~/.config/labdisk/config.toml
+$EDITOR ~/.config/labdisk/config.toml   # list your shares; add email for alerts
+labdisk tick                     # first quota reading; check the numbers look right
+labdisk schedule --account ACCOUNT --partition PARTITION   # prints scrontab entries
+scrontab -e                      # paste them in
+```
 
-Results are kept in the configured `results` directory, readable only by you, and are
-small: a few MB a year of quota history and under 1 MB per folder table.
+Everything except the list of shares defaults to whoever runs it: their account, a
+results directory at `~/.local/share/labdisk` readable only by them, and no email.
+`examples/config.toml` shows every setting.
+
+Results are small: a few tens of MB a year of quota history and under 1 MB per
+folder table.

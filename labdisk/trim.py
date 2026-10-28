@@ -13,7 +13,6 @@ from .config import Config
 from .store import read_json
 
 CAP_LINE = re.compile(r"^\s*Size cap:\s*\S", re.IGNORECASE | re.MULTILINE)
-STALE_DAYS = 180
 
 
 def has_size_cap(folder: str) -> bool:
@@ -45,7 +44,7 @@ def candidates(config: Config) -> list[dict]:
                 why.append("git worktrees; remove those no queued or running job uses")
             if name in ("pkgs", ".cache", "pip-cache", "uv-cache", "conda-pkgs"):
                 why.append("package cache; rebuilt on demand")
-            if now - row["newest"] > STALE_DAYS * 86400:
+            if now - row["newest"] > config.stale_days * 86400:
                 why.append(f"nothing inside changed in {int((now - row['newest']) / 86400)} days")
             if why:
                 out[path] = {"path": path, "alloc": row["alloc"], "newest": row["newest"], "why": "; ".join(why)}

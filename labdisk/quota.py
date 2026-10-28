@@ -32,7 +32,7 @@ class Reading:
 
 def read_quota(share: Share) -> Reading:
     """Parse the last line of `mmlsquota ... --block-size G`, which is in GiB."""
-    args = ["mmlsquota", *share.quota_args[:-1], "--block-size", "G", share.quota_args[-1]]
+    args = ["mmlsquota", *share.quota[:-1], "--block-size", "G", share.quota[-1]]
     out = subprocess.run(args, capture_output=True, text=True, timeout=120)
     lines = [line for line in out.stdout.splitlines() if line.strip()]
     if out.returncode != 0 or len(lines) < 3:
@@ -48,7 +48,7 @@ def read_quota(share: Share) -> Reading:
 
 
 def sample(config: Config) -> list[Reading]:
-    readings = [read_quota(share) for share in config.shares]
+    readings = [read_quota(share) for share in config.shares if share.quota]
     for reading in readings:
         append_jsonl(config.results / "quota.jsonl", asdict(reading))
     return readings
