@@ -133,8 +133,7 @@ def first_scan_lines(config: Config, latest: dict, shares: list[Share] | None = 
     if not rows:
         return []
     width = max(len(name) for name, _ in rows)
-    return (["The first scan is still running, so folder totals for these shares are incomplete:", ""]
-            + [f"  {name.ljust(width)}  {progress}" for name, progress in rows]
+    return ([f"  {name.ljust(width)}  {progress}" for name, progress in rows]
             + ["", _sentence(eta_text(first_scan_eta(config, latest)))])
 
 
@@ -211,7 +210,7 @@ def private_report(config: Config, latest: dict, previous: dict, trim: list[dict
     lines += ["## Quotas", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, config.shares)), ""]
     block = first_scan_lines(config, latest)
     if block:
-        lines += ["## First scan", ""] + block + [""]
+        lines += ["## First scan in progress: folder totals are incomplete", ""] + block + [""]
     for share in config.shares:
         t = latest.get(share.name)
         lines += [f"## {share.name}: `{share.path}`", ""]

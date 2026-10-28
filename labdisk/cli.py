@@ -68,7 +68,7 @@ def _scan_notes(cfg, latest: dict, shares: list[str] | None = None) -> None:
     """Say which shares' folder numbers are still incomplete, before or after showing them."""
     block = report.first_scan_lines(cfg, latest, [s for s in cfg.shares if not shares or s.name in shares])
     if block:
-        print("\nFirst scan\n")
+        print("\nFirst scan in progress: folder totals are incomplete\n")
         for line in block:
             print(textwrap.fill(line, width=100, subsequent_indent="  ") if line else "")
     print()
