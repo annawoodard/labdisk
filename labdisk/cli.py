@@ -17,11 +17,6 @@ Getting started:
                             print the scrontab entries that keep results current
 
 The full report is report.md in the results directory named in your config.
-
-Scheduled from scrontab (you do not need to run these yourself):
-
-  labdisk tick              every 15 minutes: quota readings, big-file recheck, alerts, reports
-  labdisk scan --hours H    daily: scan folders that are due, for up to H hours (Slurm only)
 """
 
 from __future__ import annotations
@@ -62,9 +57,18 @@ def cmd_status(cfg, args) -> None:
     for share in cfg.shares:
         for line in report.warnings(cfg, share, quota.outlook(cfg, share.name)):
             print("!", line)
-    latest = cfg.results / "snapshots" / "latest.json"
-    print(f"\nfolder tables from {when(os.path.getmtime(latest)) if latest.exists() else 'no scan yet'}; "
-          f"full report: {cfg.results / 'report.md'}")
+    latest, _ = _tables(cfg)
+    _scan_notes(cfg, latest)
+    print(f"\nfull report: {cfg.results / 'report.md'}")
+
+
+def _scan_notes(cfg, latest: dict, shares: list[str] | None = None) -> None:
+    """Say which shares' folder numbers are still incomplete, before showing any."""
+    notes = [report.scan_note(s.name, latest.get(s.name)) for s in cfg.shares if not shares or s.name in shares]
+    for note in filter(None, notes):
+        print("note:", note)
+    if any(notes):
+        print()
 
 
 def _tables(cfg):
@@ -74,6 +78,7 @@ def _tables(cfg):
 
 def cmd_top(cfg, args) -> None:
     latest, previous = _tables(cfg)
+    _scan_notes(cfg, latest, [args.share])
     if args.share not in latest:
         raise SystemExit(f"no scan of {args.share!r} yet; shares: {', '.join(latest) or 'none'}")
     print(report.top_table(latest[args.share], previous.get(args.share), limit=args.n))
@@ -81,6 +86,7 @@ def cmd_top(cfg, args) -> None:
 
 def cmd_mine(cfg, args) -> None:
     latest, _ = _tables(cfg)
+    _scan_notes(cfg, latest)
     rows = sorted((r for t in latest.values() for r in t.get("rows", [])), key=lambda r: -r["alloc"])
     for r in rows[:args.n]:
         print(f"{size(r['alloc']):>12}  {when(r['newest'])[:10]}  {r['path']}")
@@ -88,6 +94,7 @@ def cmd_mine(cfg, args) -> None:
 
 def cmd_grew(cfg, args) -> None:
     latest, _ = _tables(cfg)
+    _scan_notes(cfg, latest)
     cutoff = time.time() - args.days * 86400
     weeks = sorted((cfg.results / "snapshots").glob("week-*.json"))
     base = None
@@ -111,6 +118,7 @@ def cmd_grew(cfg, args) -> None:
 
 
 def cmd_trim(cfg, args) -> None:
+    _scan_notes(cfg, _tables(cfg)[0])
     for c in trim.candidates(cfg)[:args.n]:
         print(f"{size(c['alloc']):>12}  {when(c['newest'])[:10]}  {c['path']}\n{'':14}{c['why']}")
 
@@ -149,27 +157,29 @@ def main(argv: list[str] | None = None) -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", type=os.path.expanduser, default=str(config_mod.DEFAULT_CONFIG),
                         help="configuration file (default: %(default)s)")
-    sub = parser.add_subparsers(dest="command", metavar="command")
-    sub.add_parser("help", help="show this help")
-    sub.add_parser("status", help="how full each share is and how fast it is filling (default)")
-    p = sub.add_parser("top", help="largest top-level folders of one share")
+    sub = parser.add_subparsers(dest="command", metavar="command", help=argparse.SUPPRESS)
+    sub.add_parser("help", description="show this help")
+    sub.add_parser("status", description="how full each share is and how fast it is filling (default)")
+    p = sub.add_parser("top", description="largest top-level folders of one share")
     p.add_argument("share")
     p.add_argument("-n", type=int, default=25)
-    p = sub.add_parser("mine", help="your largest folders on every share")
+    p = sub.add_parser("mine", description="your largest folders on every share")
     p.add_argument("-n", type=int, default=30)
-    p = sub.add_parser("grew", help="what grew most over the last N days")
+    p = sub.add_parser("grew", description="what grew most over the last N days")
     p.add_argument("--days", type=float, default=7)
     p.add_argument("-n", type=int, default=25)
-    p = sub.add_parser("trim", help="candidates to remove or move; never deletes")
+    p = sub.add_parser("trim", description="candidates to remove or move; never deletes")
     p.add_argument("-n", type=int, default=40)
-    sub.add_parser("report", help="rewrite the Markdown reports from saved results")
-    sub.add_parser("init", help="write a starter configuration file")
-    p = sub.add_parser("schedule", help="print the scrontab entries that keep results current")
+    sub.add_parser("report", description="rewrite the Markdown reports from saved results")
+    sub.add_parser("init", description="write a starter configuration file")
+    p = sub.add_parser("schedule", description="print the scrontab entries that keep results current")
     p.add_argument("--account", required=True, help="Slurm account to charge")
     p.add_argument("--partition", required=True)
     p.add_argument("--qos")
-    sub.add_parser("tick", help="15-minute job: quota readings, big-file recheck, alerts, reports")
-    p = sub.add_parser("scan", help="daily job: scan due folders for up to --hours (Slurm only)")
+    # Subcommands carry a description (shown by `labdisk <command> -h`) but no `help`, so the
+    # main help screen shows only the examples in this module's docstring.
+    sub.add_parser("tick", description="15-minute job: quota readings, big-file recheck, alerts, reports")
+    p = sub.add_parser("scan", description="daily job: scan due folders for up to --hours (Slurm only)")
     p.add_argument("--hours", type=float, required=True)
     p.add_argument("--share", action="append", help="limit to these shares")
     args = parser.parse_args(argv)

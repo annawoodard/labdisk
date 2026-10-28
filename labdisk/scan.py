@@ -257,7 +257,7 @@ def compact(config: Config) -> None:
         path = config.results / "units" / f"{share.name}.jsonl"
         if not path.exists():
             continue
-        keep = current_records(config, share)
+        keep, _, _ = current_records(config, share)
         tmp = path.with_name(path.name + ".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as handle:
@@ -266,8 +266,11 @@ def compact(config: Config) -> None:
         os.replace(tmp, path)
 
 
-def current_records(config: Config, share: Share) -> list[dict]:
-    """The latest record of each unit in the current layout.
+def current_records(config: Config, share: Share) -> tuple[list[dict], int, int]:
+    """The latest record of each unit in the current layout, and how much of the layout they cover.
+
+    Returns (records, units covered, units in the layout). A share whose layout is not
+    fully covered has not finished its first scan, so its totals are incomplete.
 
     When a big folder has just been split and some of its new units have not been scanned
     yet, the folder's last whole-folder record stands in for all of them, so the table
@@ -276,7 +279,7 @@ def current_records(config: Config, share: Share) -> list[dict]:
     records = latest_units(config, share)
     layout = read_json(config.results / "scan_state.json", {}).get("layout", {}).get(share.name)
     if layout is None:
-        return list(records.values())
+        return list(records.values()), 0, 0
     fallback: set[str] = set()
     for key in layout:
         if key in records:
@@ -293,13 +296,14 @@ def current_records(config: Config, share: Share) -> list[dict]:
 
     out = [records[k] for k in layout if k in records and not covered(k.split(":", 1)[1])]
     out += [records[f"tree:{f}"] for f in fallback]
-    return out
+    measured = sum(1 for k in layout if k in records or covered(k.split(":", 1)[1]))
+    return out, measured, len(layout)
 
 
 def folder_table(config: Config, share: Share) -> dict:
     """Assemble the share's folder table from its latest unit records."""
     owner_uid = uid_of(config.owner)
-    units = current_records(config, share)
+    units, measured, layout_units = current_records(config, share)
     root = str(share.path)
     top: dict[str, dict] = {}
     agg: dict[str, list] = {}
@@ -361,10 +365,7 @@ def folder_table(config: Config, share: Share) -> dict:
     for folder, (alloc, size, files, newest) in agg.items():
         if alloc >= config.min_row_bytes and is_own(folder, share, owner_uid, own_cache):
             rows[folder] = {"path": folder, "alloc": alloc, "size": size, "files": files, "newest": newest}
-    layout = read_json(config.results / "scan_state.json", {}).get("layout", {}).get(share.name, [])
-    measured = {f"{r['mode']}:{r['path']}" for r in units}
-    pending = sum(1 for key in layout if key not in measured)
-    return {"share": share.name, "pending_units": pending, "layout_units": len(layout),
+    return {"share": share.name, "measured_units": measured, "layout_units": layout_units,
             "top": top, "rows": sorted(rows.values(), key=lambda r: -r["alloc"]),
             "big": sorted(big, key=lambda b: -b["alloc"]), "errors": errors,
             "oldest_scan": oldest}

@@ -67,6 +67,17 @@ def warnings(config: Config, share: Share, look: dict) -> list[str]:
     return out
 
 
+def scan_note(name: str, table: dict | None) -> str | None:
+    """Why this share's folder numbers are incomplete, or None when its first scan is done."""
+    if not table:
+        return f"{name}: no folder scan yet; the first scan has not reached this share."
+    measured, total = table.get("measured_units", 0), table.get("layout_units", 0)
+    if measured < total:
+        return (f"{name}: first scan still running, {measured:,} of {total:,} parts measured; "
+                "folder totals are incomplete until it finishes.")
+    return None
+
+
 def quota_rows(config: Config, shares: list[Share]) -> list[list]:
     rows = []
     for share in shares:
@@ -116,11 +127,10 @@ def lab_report(config: Config, share: Share, latest: dict, previous: dict) -> st
     lines += ["## Quota", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, [share])), ""]
     if t:
         total = sum(e["alloc"] for e in t["top"].values())
-        pending = t.get("pending_units", 0)
-        if pending:
-            summary = (f"The first scan is still running: {t['layout_units'] - pending:,} of {t['layout_units']:,} "
-                       f"parts of this share are measured so far, so these totals are incomplete "
-                       f"({size(total)} measured).")
+        if t.get("measured_units", 0) < t.get("layout_units", 0):
+            summary = (f"**The first scan is still running**: {t['measured_units']:,} of {t['layout_units']:,} "
+                       f"parts of this share are measured, so these totals are incomplete "
+                       f"({size(total)} measured so far).")
         else:
             unattributed = look["reading"].used - total if look else None
             summary = (f"Scanned folders add up to {size(total)}"
@@ -143,8 +153,10 @@ def private_report(config: Config, latest: dict, previous: dict, trim: list[dict
     for share in config.shares:
         t = latest.get(share.name)
         lines += [f"## {share.name}: `{share.path}`", ""]
+        note = scan_note(share.name, t)
+        if note:
+            lines += [f"> **{note}**", ""]
         if not t:
-            lines += ["No folder scan has finished yet.", ""]
             continue
         lines += ["Largest top-level folders:", "", top_table(t, previous.get(share.name), limit=20), ""]
         before = {r["path"]: r for r in (previous.get(share.name) or {}).get("rows", [])}
