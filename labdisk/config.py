@@ -66,6 +66,11 @@ class Config:
     soft_warn_fraction: float = 0.9
     publish_lab_reports: bool = False  # False: lab reports are written as previews in the results directory
     stale_days: float = 180  # trim: folders unchanged this long are listed
+    # trim: folder names (shell-style patterns, any case) listed as each kind of candidate
+    cache_names: list[str] = field(default_factory=lambda: ["*cache*"])
+    worktree_names: list[str] = field(default_factory=lambda: ["worktrees", "*-worktrees"])
+    package_cache_names: list[str] = field(default_factory=lambda: [
+        "pkgs", ".cache", "pip-cache", "uv-cache", "conda-pkgs"])
     units: str = "decimal"  # how sizes print: "decimal" (TB, GB) or "binary" (TiB, GiB)
 
 
@@ -108,6 +113,10 @@ STARTER = """\
 # readers = 4                            # parallel readers in the continuous scan
 # max_files_per_second = 2000            # across all readers
 # publish_lab_reports = false            # true: write each group's report into its share
+# stale_days = 180                       # labdisk trim lists your folders unchanged this long,
+# cache_names = ["*cache*"]              # and folders named like these (shell-style patterns)
+# worktree_names = ["worktrees", "*-worktrees"]
+# package_cache_names = ["pkgs", ".cache", "pip-cache", "uv-cache", "conda-pkgs"]
 
 # One [[share]] per storage area. `quota` is what mmlsquota needs before
 # --block-size, ending with the file system name; leave it out for no quota readings.

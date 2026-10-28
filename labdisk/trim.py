@@ -1,49 +1,37 @@
 """Candidates to trim among the owner's folders. Nothing here deletes anything.
 
-Each rule says why a folder is listed; the folder's owner decides what to do with it.
+A folder is listed when its name matches one of the configured kinds (caches, git
+worktrees, package caches) or nothing inside it has changed for `stale_days`. Each line
+says why; the folder's owner decides what to do with it.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import os
-import re
 import time
 
 from .config import Config
 from .store import read_json
 
-CAP_LINE = re.compile(r"^\s*Size cap:\s*\S", re.IGNORECASE | re.MULTILINE)
 
-
-def has_size_cap(folder: str) -> bool:
-    readme = os.path.join(folder, "README.md")
-    try:
-        with open(readme, errors="replace") as handle:
-            return bool(CAP_LINE.search(handle.read(200_000)))
-    except OSError:
-        return False
+def _matches(name: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatch(name, pattern.lower()) for pattern in patterns)
 
 
 def candidates(config: Config) -> list[dict]:
     latest = read_json(config.results / "snapshots" / "latest.json", {})
     now = time.time()
+    kinds = [(config.cache_names, "named like a cache; check whether anything current reads it"),
+             (config.worktree_names, "git worktrees; remove those no queued or running job uses"),
+             (config.package_cache_names, "a package cache; rebuilt on demand")]
     out: dict[str, dict] = {}
     for table in latest.values():
-        rows = table.get("rows", [])
-        paths = {r["path"] for r in rows}
-        for row in rows:
+        for row in table.get("rows", []):  # largest first, so a folder comes before anything inside it
             path, name = row["path"], os.path.basename(row["path"]).lower()
-            # Only the outermost listed folder of a nested run of matches, so one cache is one line.
-            parent_listed = any(path.startswith(p + os.sep) for p in paths if p in out)
-            if parent_listed:
-                continue
-            why = []
-            if "cache" in name and not has_size_cap(path):
-                why.append("a cache whose README.md declares no `Size cap:`")
-            if name in ("worktrees",) or name.endswith("-worktrees"):
-                why.append("git worktrees; remove those no queued or running job uses")
-            if name in ("pkgs", ".cache", "pip-cache", "uv-cache", "conda-pkgs"):
-                why.append("package cache; rebuilt on demand")
+            if any(path.startswith(listed + os.sep) for listed in out):
+                continue  # one line per cache or worktree folder, not one per subfolder
+            why = [reason for patterns, reason in kinds if _matches(name, patterns)]
             if now - row["newest"] > config.stale_days * 86400:
                 why.append(f"nothing inside changed in {int((now - row['newest']) / 86400)} days")
             if why:

@@ -57,10 +57,13 @@ Email, sent by the job itself, so it arrives when no one is watching:
 
 `labdisk trim` lists folders of yours that are:
 
-- caches (a name containing `cache`) whose `README.md` has no `Size cap:` line,
-- git worktrees,
-- package caches,
+- caches (a name containing `cache`),
+- git worktrees (`worktrees`, `*-worktrees`),
+- package caches (`pkgs`, `.cache`, `pip-cache`, ...),
 - or unchanged for 180 days.
+
+The names and the 180 days are settings (`cache_names`, `worktree_names`,
+`package_cache_names`, `stale_days`), so the list can match your own layout.
 
 It never deletes anything; each line says why the folder is listed.
 

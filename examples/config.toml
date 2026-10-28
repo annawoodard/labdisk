@@ -13,6 +13,8 @@ readers = 4                             # parallel readers in the continuous sca
 max_files_per_second = 2000             # across all readers
 own_rescan_days = 1                     # your folders
 other_rescan_days = 7                   # everyone else's top-level folders
+stale_days = 180                        # labdisk trim: your folders unchanged this long
+cache_names = ["*cache*"]               # labdisk trim: folder names listed as caches
 publish_lab_reports = false             # true: write each group's report into its share
 
 # One [[share]] per storage area with its own quota. `quota` is what mmlsquota needs
