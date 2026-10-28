@@ -53,7 +53,7 @@ def cmd_scan(cfg, args) -> None:
 
 def cmd_status(cfg, args) -> None:
     rows = report.quota_rows(cfg, cfg.shares)
-    print(report.table(report.QUOTA_HEADER, rows))
+    print(report.table(report.QUOTA_HEADER, rows, text=True))
     for share in cfg.shares:
         for line in report.warnings(cfg, share, quota.outlook(cfg, share.name)):
             print("!", line)
@@ -81,15 +81,16 @@ def cmd_top(cfg, args) -> None:
     _scan_notes(cfg, latest, [args.share])
     if args.share not in latest:
         raise SystemExit(f"no scan of {args.share!r} yet; shares: {', '.join(latest) or 'none'}")
-    print(report.top_table(latest[args.share], previous.get(args.share), limit=args.n))
+    print(report.top_table(latest[args.share], previous.get(args.share), limit=args.n, text=True))
 
 
 def cmd_mine(cfg, args) -> None:
     latest, _ = _tables(cfg)
     _scan_notes(cfg, latest)
     rows = sorted((r for t in latest.values() for r in t.get("rows", [])), key=lambda r: -r["alloc"])
-    for r in rows[:args.n]:
-        print(f"{size(r['alloc']):>12}  {when(r['newest'])[:10]}  {r['path']}")
+    print(report.table(["on disk", "files", "last change", "folder"],
+                       [[size(r["alloc"]), f"{r['files']:,}", when(r["newest"])[:10], r["path"]]
+                        for r in rows[:args.n]], text=True))
 
 
 def cmd_grew(cfg, args) -> None:
@@ -113,14 +114,15 @@ def cmd_grew(cfg, args) -> None:
         for r in t.get("rows", []):
             changes.append((r["alloc"] - old.get(r["path"], 0), r["path"]))
     print(f"change since {base.name}:")
-    for delta, label in sorted(changes, reverse=True)[:args.n]:
-        print(f"{size(delta):>12}  {label}")
+    print(report.table(["change", "folder"],
+                       [[size(delta), label] for delta, label in sorted(changes, reverse=True)[:args.n]], text=True))
 
 
 def cmd_trim(cfg, args) -> None:
     _scan_notes(cfg, _tables(cfg)[0])
-    for c in trim.candidates(cfg)[:args.n]:
-        print(f"{size(c['alloc']):>12}  {when(c['newest'])[:10]}  {c['path']}\n{'':14}{c['why']}")
+    print(report.table(["on disk", "last change", "folder", "why listed"],
+                       [[size(c["alloc"]), when(c["newest"])[:10], c["path"], c["why"]]
+                        for c in trim.candidates(cfg)[:args.n]], text=True))
 
 
 def cmd_report(cfg, args) -> None:

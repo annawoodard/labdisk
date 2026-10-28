@@ -39,10 +39,24 @@ def when(t: float | None) -> str:
     return "never" if not t else time.strftime("%Y-%m-%d %H:%M", time.localtime(t))
 
 
-def table(header: list[str], rows: list[list]) -> str:
-    out = ["| " + " | ".join(header) + " |", "|" + "|".join(" --- " for _ in header) + "|"]
-    out += ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
-    return "\n".join(out)
+def table(header: list[str], rows: list[list], text: bool = False) -> str:
+    """A Markdown table for the reports, or with `text` an aligned one for the terminal.
+
+    In the terminal, backticks are dropped and columns whose cells all start with a digit
+    or a sign (sizes, counts, changes) are right-aligned.
+    """
+    if not text:
+        out = ["| " + " | ".join(header) + " |", "|" + "|".join(" --- " for _ in header) + "|"]
+        out += ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
+        return "\n".join(out)
+    cells = [[str(c).replace("`", "") for c in row] for row in rows]
+    widths = [max([len(h)] + [len(r[i]) for r in cells]) for i, h in enumerate(header)]
+    numeric = [bool(cells) and all(r[i][:1] in "0123456789+-−—" for r in cells) for i in range(len(header))]
+
+    def line(values: list[str]) -> str:
+        return "  ".join(v.rjust(w) if n else v.ljust(w) for v, w, n in zip(values, widths, numeric)).rstrip()
+
+    return "\n".join([line(header), line(["─" * w for w in widths])] + [line(r) for r in cells])
 
 
 def warnings(config: Config, share: Share, look: dict) -> list[str]:
@@ -105,7 +119,7 @@ def change(path_key: str, now: dict, before: dict | None) -> str:
     return size(now["alloc"] - before[path_key]["alloc"])
 
 
-def top_table(table_now: dict, table_before: dict | None, limit: int | None = None) -> str:
+def top_table(table_now: dict, table_before: dict | None, limit: int | None = None, text: bool = False) -> str:
     before = (table_before or {}).get("top")
     items = sorted(table_now["top"].items(), key=lambda kv: -kv[1]["alloc"])[:limit]
     return table(["folder", "owner", "on disk", "change since previous scan", "files", "last change",
@@ -113,7 +127,7 @@ def top_table(table_now: dict, table_before: dict | None, limit: int | None = No
                  [[f"`{name}`" + ("" if e.get("readable", True) else " (unreadable)")
                   + (f" ({e['errors']:,} entries unreadable)" if e.get("errors") else ""), e.get("owner", "—"),
                    size(e["alloc"]), change(name, e, before), f"{e['files']:,}", when(e["newest"])[:10],
-                   when(e["scanned_at"])[:10]] for name, e in items])
+                   when(e["scanned_at"])[:10]] for name, e in items], text=text)
 
 
 def lab_report(config: Config, share: Share, latest: dict, previous: dict) -> str:
