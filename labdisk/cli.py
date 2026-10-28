@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import textwrap
 import sys
 import time
 
@@ -52,23 +53,25 @@ def cmd_scan(cfg, args) -> None:
 
 
 def cmd_status(cfg, args) -> None:
-    rows = report.quota_rows(cfg, cfg.shares)
-    print(report.table(report.QUOTA_HEADER, rows, text=True))
-    for share in cfg.shares:
-        for line in report.warnings(cfg, share, quota.outlook(cfg, share.name)):
-            print("!", line)
-    latest, _ = _tables(cfg)
-    _scan_notes(cfg, latest)
-    print(f"\nfull report: {cfg.results / 'report.md'}")
+    print("\nQuotas\n")
+    print(report.table(report.QUOTA_HEADER, report.quota_rows(cfg, cfg.shares), text=True))
+    lines = [w for s in cfg.shares for w in report.warnings(cfg, s, quota.outlook(cfg, s.name))]
+    if lines:
+        print("\nWarnings\n")
+        for line in lines:
+            print(textwrap.fill(line, width=100, initial_indent="  ! ", subsequent_indent="    "))
+    _scan_notes(cfg, _tables(cfg)[0])
+    print(f"Full report: {cfg.results / 'report.md'}\n")
 
 
 def _scan_notes(cfg, latest: dict, shares: list[str] | None = None) -> None:
-    """Say which shares' folder numbers are still incomplete, before showing any."""
-    notes = [report.scan_note(s.name, latest.get(s.name)) for s in cfg.shares if not shares or s.name in shares]
-    for note in filter(None, notes):
-        print("note:", note)
-    if any(notes):
-        print()
+    """Say which shares' folder numbers are still incomplete, before or after showing them."""
+    block = report.first_scan_lines(cfg, latest, [s for s in cfg.shares if not shares or s.name in shares])
+    if block:
+        print("\nFirst scan\n")
+        for line in block:
+            print(textwrap.fill(line, width=100, subsequent_indent="  ") if line else "")
+    print()
 
 
 def _tables(cfg):

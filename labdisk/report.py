@@ -81,15 +81,61 @@ def warnings(config: Config, share: Share, look: dict) -> list[str]:
     return out
 
 
-def scan_note(name: str, table: dict | None) -> str | None:
-    """Why this share's folder numbers are incomplete, or None when its first scan is done."""
+def first_scan_eta(config: Config, latest: dict) -> float | None:
+    """Hours until the first scan of every share finishes, at the scan's recent pace.
+
+    The files still to read are each unfinished share's file count from its quota reading
+    minus the files measured so far; the pace is files measured per hour over the last
+    few hours. None when the scan is finished or has no recent pace to go on.
+    """
+    remaining, recent, since = 0, 0, None
+    for share in config.shares:
+        t = latest.get(share.name) or {}
+        recent += t.get("recent_files", 0)
+        if t.get("recent_since"):
+            since = t["recent_since"] if since is None else min(since, t["recent_since"])
+        if t and t.get("measured_units", 0) >= t.get("layout_units", 0):
+            continue
+        look = outlook(config, share.name)
+        if not look:
+            return None  # a share with no quota file count: nothing to estimate from
+        remaining += max(look["reading"].files - t.get("files_measured", 0), 0)
+    if not remaining:
+        return None
+    if not recent or since is None or time.time() - since < 600:
+        return None
+    return remaining / (recent / ((time.time() - since) / 3600))
+
+
+def eta_text(hours_left: float | None) -> str:
+    if hours_left is None:
+        return "not enough progress yet to estimate when it finishes"
+    done = time.strftime("%a %b %-d %H:%M", time.localtime(time.time() + hours_left * 3600))
+    return (f"about {hours(hours_left)} of scanning left at its recent pace: around {done} if it runs "
+            "without a break (maintenance windows and job time limits add to that)")
+
+
+def _sentence(text: str) -> str:
+    return text[:1].upper() + text[1:] + "."
+
+
+def scan_progress(table: dict | None) -> str | None:
+    """How far the first scan of a share has got, or None when it is done."""
     if not table:
-        return f"{name}: no folder scan yet; the first scan has not reached this share."
+        return "not reached yet"
     measured, total = table.get("measured_units", 0), table.get("layout_units", 0)
-    if measured < total:
-        return (f"{name}: first scan still running, {measured:,} of {total:,} parts measured; "
-                "folder totals are incomplete until it finishes.")
-    return None
+    return f"{measured:,} of {total:,} parts measured" if measured < total else None
+
+
+def first_scan_lines(config: Config, latest: dict, shares: list[Share] | None = None) -> list[str]:
+    """The first-scan block: one estimate, then each unfinished share; empty when all are done."""
+    rows = [(s.name, p) for s in (shares or config.shares) if (p := scan_progress(latest.get(s.name)))]
+    if not rows:
+        return []
+    width = max(len(name) for name, _ in rows)
+    return (["The first scan is still running, so folder totals for these shares are incomplete:", ""]
+            + [f"  {name.ljust(width)}  {progress}" for name, progress in rows]
+            + ["", _sentence(eta_text(first_scan_eta(config, latest)))])
 
 
 def quota_rows(config: Config, shares: list[Share]) -> list[list]:
@@ -141,10 +187,9 @@ def lab_report(config: Config, share: Share, latest: dict, previous: dict) -> st
     lines += ["## Quota", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, [share])), ""]
     if t:
         total = sum(e["alloc"] for e in t["top"].values())
-        if t.get("measured_units", 0) < t.get("layout_units", 0):
-            summary = (f"**The first scan is still running**: {t['measured_units']:,} of {t['layout_units']:,} "
-                       f"parts of this share are measured, so these totals are incomplete "
-                       f"({size(total)} measured so far).")
+        if scan_progress(t):
+            summary = (f"**The first scan is still running**: {scan_progress(t)}, so these totals are incomplete "
+                       f"({size(total)} measured so far). {_sentence(eta_text(first_scan_eta(config, latest)))}")
         else:
             unattributed = look["reading"].used - total if look else None
             summary = (f"Scanned folders add up to {size(total)}"
@@ -164,12 +209,15 @@ def private_report(config: Config, latest: dict, previous: dict, trim: list[dict
         for w in warnings(config, share, outlook(config, share.name)):
             lines += [f"> **{w}**", ""]
     lines += ["## Quotas", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, config.shares)), ""]
+    block = first_scan_lines(config, latest)
+    if block:
+        lines += ["## First scan", ""] + block + [""]
     for share in config.shares:
         t = latest.get(share.name)
         lines += [f"## {share.name}: `{share.path}`", ""]
-        note = scan_note(share.name, t)
-        if note:
-            lines += [f"> **{note}**", ""]
+        progress = scan_progress(t)
+        if progress:
+            lines += [f"> **First scan still running here: {progress}; totals below are incomplete.**", ""]
         if not t:
             continue
         lines += ["Largest top-level folders:", "", top_table(t, previous.get(share.name), limit=20), ""]

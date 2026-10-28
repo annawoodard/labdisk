@@ -39,6 +39,9 @@ from .config import Config, Share
 from .store import append_jsonl, read_json, read_jsonl, write_json
 
 
+RECENT_HOURS = 3  # the scan's pace, for time-left estimates, is measured over this window
+
+
 def uid_of(name: str) -> int:
     return pwd.getpwnam(name).pw_uid
 
@@ -365,7 +368,12 @@ def folder_table(config: Config, share: Share) -> dict:
     for folder, (alloc, size, files, newest) in agg.items():
         if alloc >= config.min_row_bytes and is_own(folder, share, owner_uid, own_cache):
             rows[folder] = {"path": folder, "alloc": alloc, "size": size, "files": files, "newest": newest}
+    window = time.time() - RECENT_HOURS * 3600
+    recent = [r for r in units if r["scanned_at"] >= window]
     return {"share": share.name, "measured_units": measured, "layout_units": layout_units,
+            "files_measured": sum(r["files"] for r in units),
+            "recent_files": sum(r["files"] for r in recent),
+            "recent_since": min((r["scanned_at"] for r in recent), default=None),
             "top": top, "rows": sorted(rows.values(), key=lambda r: -r["alloc"]),
             "big": sorted(big, key=lambda b: -b["alloc"]), "errors": errors,
             "oldest_scan": oldest}
