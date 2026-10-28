@@ -195,6 +195,7 @@ def main(argv: list[str] | None = None) -> None:
         cmd_init(args)
         return
     cfg = config_mod.load(config_mod.Path(args.config))
+    report.use_units(cfg.units)
     {"status": cmd_status, None: cmd_status, "top": cmd_top, "mine": cmd_mine, "grew": cmd_grew,
      "trim": cmd_trim, "report": cmd_report, "tick": cmd_tick, "scan": cmd_scan, "schedule": cmd_schedule}[args.command](cfg, args)
 

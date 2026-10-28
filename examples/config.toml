@@ -6,6 +6,7 @@ owner = "alice"                         # default: the account running labdisk
 results = "~/labdisk-data"              # default: ~/.local/share/labdisk; readable by you only
 email = "alice@example.edu"             # where alerts go; default: none sent
 
+units = "decimal"                       # how sizes print: decimal (TB, GB) or binary (TiB, GiB)
 min_row_bytes = "10 GiB"                # smallest folder of yours that gets its own row
 big_file_bytes = "1 GiB"                # your files this big are rechecked every 15 minutes
 readers = 4                             # parallel readers in the continuous scan

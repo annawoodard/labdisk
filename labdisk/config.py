@@ -66,6 +66,7 @@ class Config:
     soft_warn_fraction: float = 0.9
     publish_lab_reports: bool = False  # False: lab reports are written as previews in the results directory
     stale_days: float = 180  # trim: folders unchanged this long are listed
+    units: str = "decimal"  # how sizes print: "decimal" (TB, GB) or "binary" (TiB, GiB)
 
 
 def load(path: Path = DEFAULT_CONFIG) -> Config:
@@ -102,6 +103,7 @@ STARTER = """\
 # owner = "{user}"
 # results = "{results}"
 # email = "you@uchicago.edu"             # where alerts go; unset sends none
+# units = "decimal"                      # how sizes print: decimal (TB, GB) or binary (TiB, GiB)
 # min_row_bytes = "10 GiB"               # smallest folder of yours that gets its own row
 # readers = 4                            # parallel readers in the continuous scan
 # max_files_per_second = 2000            # across all readers

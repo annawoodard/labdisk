@@ -16,13 +16,24 @@ from .config import Config, Share
 from .quota import outlook
 from .store import read_json, write_text
 
-TIB, GIB = 2**40, 2**30
+# Sizes print in decimal units (TB, GB) unless the config asks for binary (TiB, GiB);
+# `use_units` sets this once per run, before anything is printed or written.
+_UNITS = {"decimal": (10**12, "TB", 10**9, "GB"), "binary": (2**40, "TiB", 2**30, "GiB")}
+_unit = _UNITS["decimal"]
+
+
+def use_units(name: str) -> None:
+    global _unit
+    if name not in _UNITS:
+        raise ValueError(f"units must be one of {sorted(_UNITS)}, not {name!r}")
+    _unit = _UNITS[name]
 
 
 def size(n: float | None) -> str:
     if n is None:
         return "—"
-    return f"{n / TIB:,.2f} TiB" if abs(n) >= TIB else f"{n / GIB:,.1f} GiB"
+    big, big_name, small, small_name = _unit
+    return f"{n / big:,.2f} {big_name}" if abs(n) >= big else f"{n / small:,.1f} {small_name}"
 
 
 def rate(n: float | None) -> str:
@@ -153,9 +164,11 @@ def quota_rows(config: Config, shares: list[Share]) -> list[list]:
 
 QUOTA_HEADER = ["share", "used", "soft quota", "hard limit", "left before hard limit", "last hour",
                 "last day", "files"]
-QUOTA_NOTE = ("The soft quota is the level past which writes keep working only for a grace period; the hard "
-              "limit is where writes fail at once. Sizes are what the quota charges, in binary units "
-              "(1 TiB = 1,024 GiB = 1.10 TB).")
+def quota_note() -> str:
+    units = ("decimal units (1 TB = 1,000 GB)" if _unit[1] == "TB"
+             else "binary units (1 TiB = 1,024 GiB = 1.10 TB)")
+    return ("The soft quota is the level past which writes keep working only for a grace period; the hard "
+            f"limit is where writes fail at once. Sizes are what the quota charges, in {units}.")
 
 
 def change(path_key: str, now: dict, before: dict | None) -> str:
@@ -183,7 +196,7 @@ def lab_report(config: Config, share: Share, latest: dict, previous: dict) -> st
              f"`{share.path}` only and is refreshed every 15 minutes; folder sizes come from a slower scan.", ""]
     for w in warnings(config, share, look):
         lines += [f"> **{w}**", ""]
-    lines += ["## Quota", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, [share])), ""]
+    lines += ["## Quota", "", quota_note(), "", table(QUOTA_HEADER, quota_rows(config, [share])), ""]
     if t:
         total = sum(e["alloc"] for e in t["top"].values())
         if scan_progress(t):
@@ -207,7 +220,7 @@ def private_report(config: Config, latest: dict, previous: dict, trim: list[dict
     for share in config.shares:
         for w in warnings(config, share, outlook(config, share.name)):
             lines += [f"> **{w}**", ""]
-    lines += ["## Quotas", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, config.shares)), ""]
+    lines += ["## Quotas", "", quota_note(), "", table(QUOTA_HEADER, quota_rows(config, config.shares)), ""]
     block = first_scan_lines(config, latest)
     if block:
         lines += ["## First scan in progress: folder totals are incomplete", ""] + block + [""]
