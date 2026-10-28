@@ -10,7 +10,8 @@ starts a scan.
   labdisk trim              candidates to delete or move, and why (never deletes)
   labdisk report            rewrite the Markdown reports now
 
-Add --binary to any of these to see sizes in TiB and GiB instead of TB and GB.
+Sizes print in decimal units (TB, GB) unless your config says otherwise; add --binary
+(TiB, GiB) or --decimal to any command to choose for one run.
 
 Getting started:
 
@@ -162,8 +163,11 @@ def cmd_schedule(cfg, args) -> None:
 def main(argv: list[str] | None = None) -> None:
     # Options every command accepts, before or after the command name.
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--binary", action="store_true", default=argparse.SUPPRESS,
-                        help="print sizes in binary units (TiB, GiB) this time, whatever the config says")
+    units = common.add_mutually_exclusive_group()
+    units.add_argument("--binary", dest="units", action="store_const", const="binary", default=argparse.SUPPRESS,
+                       help="print sizes in binary units (TiB, GiB) this time, whatever the config says")
+    units.add_argument("--decimal", dest="units", action="store_const", const="decimal", default=argparse.SUPPRESS,
+                       help="print sizes in decimal units (TB, GB) this time, whatever the config says")
     parser = argparse.ArgumentParser(prog="labdisk", description=__doc__, parents=[common],
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", type=os.path.expanduser, default=str(config_mod.DEFAULT_CONFIG),
@@ -201,7 +205,7 @@ def main(argv: list[str] | None = None) -> None:
         cmd_init(args)
         return
     cfg = config_mod.load(config_mod.Path(args.config))
-    report.use_units("binary" if getattr(args, "binary", False) else cfg.units)
+    report.use_units(getattr(args, "units", cfg.units))
     {"status": cmd_status, None: cmd_status, "top": cmd_top, "mine": cmd_mine, "grew": cmd_grew,
      "trim": cmd_trim, "report": cmd_report, "tick": cmd_tick, "scan": cmd_scan, "schedule": cmd_schedule}[args.command](cfg, args)
 
