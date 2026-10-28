@@ -1,0 +1,29 @@
+# Example labdisk configuration. Copy to ~/.config/labdisk/config.toml and edit.
+# Keep the real file out of version control: it names your shares and accounts.
+
+owner = "alice"                         # account whose folders get detailed rows
+results = "~/labdisk-data"              # private results; readable by owner only
+email = "alice@example.edu"             # where alerts go; omit to send none
+
+min_row_bytes = "10 GiB"                # smallest folder of yours that gets its own row
+big_file_bytes = "1 GiB"                # your files this big are rechecked every 15 minutes
+readers = 4                             # parallel readers in the continuous scan
+max_files_per_second = 2000             # across all readers
+own_rescan_days = 1                     # your folders
+other_rescan_days = 7                   # everyone else's top-level folders
+publish_lab_reports = false             # true: write each group's report into its share
+
+# One [[share]] per storage area with its own quota. `quota` is what mmlsquota needs
+# before --block-size, ending with the file system name. `group`, if set, gets a
+# report about this share at <path>/storage_report/README.md.
+
+[[share]]
+name = "lab-a"
+path = "/gpfs/data/lab-a"
+quota = ["-j", "lab-a", "data1"]        # a fileset quota
+group = "lab-a-group"
+
+[[share]]
+name = "scratch"
+path = "/scratch/alice"
+quota = ["-u", "alice", "scratch1"]     # a per-user quota; no shared report
