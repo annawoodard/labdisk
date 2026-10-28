@@ -20,6 +20,8 @@ from .store import read_json
 
 def cmd_tick(cfg, args) -> None:
     quota.sample(cfg)
+    if (cfg.results / "units").exists():
+        scan.snapshot(cfg, rotate=False)
     grew = scan.recheck_big_files(cfg)
     for subject in alert.check(cfg, grew):
         print("sent:", subject)
@@ -28,8 +30,9 @@ def cmd_tick(cfg, args) -> None:
 
 
 def cmd_scan(cfg, args) -> None:
-    scan.run(cfg, args.hours, args.share)
-    scan.snapshot(cfg)
+    if not scan.run(cfg, args.hours, args.share):
+        return
+    scan.snapshot(cfg, rotate=True)
     for path in report.write_all(cfg, trim.candidates(cfg)):
         print("wrote", path)
 

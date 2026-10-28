@@ -28,6 +28,7 @@ Run only inside a Slurm allocation; it walks directory trees.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import pwd
@@ -182,10 +183,22 @@ def is_own(path: str, share: Share, owner_uid: int, cache: dict[str, bool]) -> b
     return own
 
 
-def run(config: Config, hours: float, shares: list[str] | None = None) -> None:
-    """Scan due units, owner's first, until `hours` have passed or nothing is due."""
+def run(config: Config, hours: float, shares: list[str] | None = None) -> bool:
+    """Scan due units, owner's first, until `hours` have passed or nothing is due.
+
+    Returns False without scanning if another scan is running.
+    """
     if not os.environ.get("SLURM_JOB_ID"):
         raise SystemExit("labdisk scan walks directory trees; run it inside a Slurm job")
+    # One scan at a time: two would rescan the same units and interleave their records.
+    # The lock is released by the kernel when the process ends, so it cannot go stale.
+    config.results.mkdir(parents=True, exist_ok=True)
+    lock = open(config.results / "scan.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("another labdisk scan holds the lock; exiting", flush=True)
+        return False
     deadline = time.time() + hours * 3600
     owner_uid = uid_of(config.owner)
     per_reader = config.max_files_per_second / config.readers
@@ -235,6 +248,7 @@ def run(config: Config, hours: float, shares: list[str] | None = None) -> None:
                         state["splits"][share_name].append(path)
                         write_json(state_path, state)
     compact(config)
+    return True
 
 
 def compact(config: Config) -> None:
@@ -352,11 +366,20 @@ def folder_table(config: Config, share: Share) -> dict:
             "oldest_scan": oldest}
 
 
-def snapshot(config: Config) -> None:
-    """Save today's folder tables; one copy per week is kept for 26 weeks."""
+def snapshot(config: Config, rotate: bool) -> None:
+    """Rebuild the folder tables from the unit records saved so far.
+
+    With `rotate`, which a finished scan pass uses, the tables being replaced become
+    `previous.json`, the baseline for "change since previous scan", and one copy per week
+    is kept for 26 weeks. Without it (the 15-minute tick), only `latest.json` is refreshed,
+    so a long pass shows its progress as it goes.
+    """
     day = time.strftime("%Y-%m-%d")
     out = config.results / "snapshots"
     tables = {share.name: folder_table(config, share) for share in config.shares}
+    if not rotate:
+        write_json(out / "latest.json", tables)
+        return
     if (out / "latest.json").exists():
         os.replace(out / "latest.json", out / "previous.json")
     write_json(out / "latest.json", tables)
