@@ -1,10 +1,21 @@
-"""`labdisk`: answer storage questions from saved results, and keep those results current.
+"""Storage on your shares: how full, how fast it is filling, and what is using it.
 
-Questions are answered from what the scan already saved, in seconds; none of them
-starts a scan. Two commands keep the results current, both meant for scrontab:
+Every command answers from results the scan already saved, in seconds, and never
+starts a scan.
 
-    labdisk tick            every 15 minutes: quota readings, big-file recheck, alerts, reports
-    labdisk scan --hours H  daily: scan whatever folders are due for H hours (Slurm only)
+  labdisk                   how full each share is, how fast it is growing, any warnings
+  labdisk top SHARE         biggest top-level folders on one share, with owners
+  labdisk mine              your biggest folders on every share
+  labdisk grew --days 7     what grew most over the last 7 days
+  labdisk trim              candidates to delete or move, and why (never deletes)
+  labdisk report            rewrite the Markdown reports now
+
+The full report is report.md in the results directory named in your config.
+
+Scheduled from scrontab (you do not need to run these yourself):
+
+  labdisk tick              every 15 minutes: quota readings, big-file recheck, alerts, reports
+  labdisk scan --hours H    daily: scan folders that are due, for up to H hours (Slurm only)
 """
 
 from __future__ import annotations
@@ -104,8 +115,10 @@ def cmd_report(cfg, args) -> None:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="labdisk", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--config", type=os.path.expanduser, default=str(config_mod.DEFAULT_CONFIG))
-    sub = parser.add_subparsers(dest="command")
+    parser.add_argument("--config", type=os.path.expanduser, default=str(config_mod.DEFAULT_CONFIG),
+                        help="configuration file (default: %(default)s)")
+    sub = parser.add_subparsers(dest="command", metavar="command")
+    sub.add_parser("help", help="show this help")
     sub.add_parser("status", help="how full each share is and how fast it is filling (default)")
     p = sub.add_parser("top", help="largest top-level folders of one share")
     p.add_argument("share")
@@ -123,6 +136,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--hours", type=float, required=True)
     p.add_argument("--share", action="append", help="limit to these shares")
     args = parser.parse_args(argv)
+    if args.command == "help":
+        parser.print_help()
+        return
     cfg = config_mod.load(config_mod.Path(args.config))
     {"status": cmd_status, None: cmd_status, "top": cmd_top, "mine": cmd_mine, "grew": cmd_grew,
      "trim": cmd_trim, "report": cmd_report, "tick": cmd_tick, "scan": cmd_scan}[args.command](cfg, args)
