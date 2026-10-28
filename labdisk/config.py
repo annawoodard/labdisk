@@ -71,7 +71,7 @@ class Config:
     worktree_names: list[str] = field(default_factory=lambda: ["worktrees", "*-worktrees"])
     package_cache_names: list[str] = field(default_factory=lambda: [
         "pkgs", ".cache", "pip-cache", "uv-cache", "conda-pkgs"])
-    units: str = "decimal"  # how sizes print: "decimal" (TB, GB) or "binary" (TiB, GiB)
+    units: str = "binary"  # how sizes print: "binary" (TiB, GiB) or "decimal" (TB, GB)
 
 
 def load(path: Path = DEFAULT_CONFIG) -> Config:
@@ -108,7 +108,7 @@ STARTER = """\
 # owner = "{user}"
 # results = "{results}"
 # email = "you@uchicago.edu"             # where alerts go; unset sends none
-# units = "decimal"                      # how sizes print: decimal (TB, GB) or binary (TiB, GiB)
+# units = "binary"                       # how sizes print: binary (TiB, GiB) or decimal (TB, GB)
 # min_row_bytes = "10 GiB"               # smallest folder of yours that gets its own row
 # readers = 4                            # parallel readers in the continuous scan
 # max_files_per_second = 2000            # across all readers

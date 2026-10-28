@@ -16,10 +16,10 @@ from .config import Config, Share
 from .quota import outlook
 from .store import read_json, write_text
 
-# Sizes print in decimal units (TB, GB) unless the config asks for binary (TiB, GiB);
+# Sizes print in binary units (TiB, GiB) unless the config asks for decimal (TB, GB);
 # `use_units` sets this once per run, before anything is printed or written.
 _UNITS = {"decimal": (10**12, "TB", 10**9, "GB"), "binary": (2**40, "TiB", 2**30, "GiB")}
-_unit = _UNITS["decimal"]
+_unit = _UNITS["binary"]
 
 
 def use_units(name: str) -> None:

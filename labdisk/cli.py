@@ -10,8 +10,8 @@ starts a scan.
   labdisk trim              candidates to delete or move, and why (never deletes)
   labdisk report            rewrite the Markdown reports now
 
-Sizes print in decimal units (TB, GB) unless your config says otherwise; add --binary
-(TiB, GiB) or --decimal to any command to choose for one run.
+Sizes print in binary units (TiB, GiB) unless your config says otherwise; add --decimal
+(TB, GB) or --binary to any command to choose for one run.
 
 Getting started:
 
