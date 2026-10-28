@@ -108,18 +108,26 @@ def lab_report(config: Config, share: Share, latest: dict, previous: dict) -> st
     t = latest.get(share.name)
     look = outlook(config, share.name)
     lines = [f"# Storage report: {share.name}", "",
-             f"Updated {when(time.time())} by `labdisk`. This report covers `{share.path}` only.", ""]
+             f"Updated {when(time.time())} by `labdisk`, run by {config.owner}. This report covers "
+             f"`{share.path}` only and is refreshed every 15 minutes; folder sizes come from a slower scan.", ""]
     for w in warnings(config, share, look):
         lines += [f"> **{w}**", ""]
     lines += ["## Quota", "", QUOTA_NOTE, "", table(QUOTA_HEADER, quota_rows(config, [share])), ""]
     if t:
         total = sum(e["alloc"] for e in t["top"].values())
-        unattributed = look["reading"].used - total if look else None
+        pending = t.get("pending_units", 0)
+        if pending:
+            summary = (f"The first scan is still running: {t['layout_units'] - pending:,} of {t['layout_units']:,} "
+                       f"parts of this share are measured so far, so these totals are incomplete "
+                       f"({size(total)} measured).")
+        else:
+            unattributed = look["reading"].used - total if look else None
+            summary = (f"Scanned folders add up to {size(total)}"
+                       + (f"; {size(unattributed)} of the quota is in folders the scan could not read."
+                          if unattributed is not None else "."))
         lines += ["## Top-level folders", "",
                   "One row per top-level folder; each folder is re-measured at least weekly, so a row can be up "
-                  f"to a week old (see 'scanned'). Scanned folders add up to {size(total)}"
-                  + (f"; {size(unattributed)} of the quota is not in any folder the scan could read." if
-                     unattributed is not None else "."), "", top_table(t, previous.get(share.name)), ""]
+                  f"to a week old (see 'scanned'). {summary}", "", top_table(t, previous.get(share.name)), ""]
     else:
         lines += ["No folder scan has finished yet.", ""]
     return "\n".join(lines)

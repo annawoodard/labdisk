@@ -361,7 +361,10 @@ def folder_table(config: Config, share: Share) -> dict:
     for folder, (alloc, size, files, newest) in agg.items():
         if alloc >= config.min_row_bytes and is_own(folder, share, owner_uid, own_cache):
             rows[folder] = {"path": folder, "alloc": alloc, "size": size, "files": files, "newest": newest}
-    return {"share": share.name, "top": top, "rows": sorted(rows.values(), key=lambda r: -r["alloc"]),
+    layout = read_json(config.results / "scan_state.json", {}).get("layout", {}).get(share.name, [])
+    pending = sum(1 for key in layout if key not in latest_units(config, share))
+    return {"share": share.name, "pending_units": pending, "layout_units": len(layout),
+            "top": top, "rows": sorted(rows.values(), key=lambda r: -r["alloc"]),
             "big": sorted(big, key=lambda b: -b["alloc"]), "units": len(units), "errors": errors,
             "oldest_scan": oldest}
 
