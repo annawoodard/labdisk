@@ -30,13 +30,9 @@ def read_jsonl(path: Path) -> list[dict]:
         return [json.loads(line) for line in handle if line.strip()]
 
 
-def write_json(path: Path, value, mode: int = 0o600) -> None:
+def write_json(path: Path, value) -> None:
     _private_dir(path.parent)
-    tmp = path.with_name(path.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
-    with os.fdopen(fd, "w") as handle:
-        json.dump(value, handle, indent=1)
-    os.replace(tmp, path)
+    write_text(path, json.dumps(value, indent=1))
 
 
 def read_json(path: Path, default=None):
@@ -47,6 +43,7 @@ def read_json(path: Path, default=None):
 
 
 def write_text(path: Path, text: str, mode: int = 0o600) -> None:
+    """Write to a temporary sibling and rename it into place, so a reader never sees half a file."""
     tmp = path.with_name(path.name + ".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     with os.fdopen(fd, "w") as handle:

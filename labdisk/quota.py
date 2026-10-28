@@ -6,7 +6,6 @@ says how fast a share is filling and when it will be full.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import time
 from dataclasses import asdict, dataclass
@@ -87,6 +86,3 @@ def outlook(config: Config, share: str) -> dict:
         out["files_left"] = now.file_hard - now.files
     return out
 
-
-def dumps(readings: list[Reading]) -> str:
-    return json.dumps([asdict(r) for r in readings], indent=2)

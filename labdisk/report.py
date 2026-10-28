@@ -91,7 +91,7 @@ QUOTA_NOTE = ("The soft quota is the level past which writes keep working only f
 def change(path_key: str, now: dict, before: dict | None) -> str:
     if not before or path_key not in before:
         return "—"
-    return size(now["alloc"] - before[path_key]["alloc"]).replace("−", "-")
+    return size(now["alloc"] - before[path_key]["alloc"])
 
 
 def top_table(table_now: dict, table_before: dict | None, limit: int | None = None) -> str:
@@ -99,7 +99,8 @@ def top_table(table_now: dict, table_before: dict | None, limit: int | None = No
     items = sorted(table_now["top"].items(), key=lambda kv: -kv[1]["alloc"])[:limit]
     return table(["folder", "owner", "on disk", "change since previous scan", "files", "last change",
                   "scanned"],
-                 [[f"`{name}`" + ("" if e.get("readable", True) else " (unreadable)"), e.get("owner", "—"),
+                 [[f"`{name}`" + ("" if e.get("readable", True) else " (unreadable)")
+                  + (f" ({e['errors']:,} entries unreadable)" if e.get("errors") else ""), e.get("owner", "—"),
                    size(e["alloc"]), change(name, e, before), f"{e['files']:,}", when(e["newest"])[:10],
                    when(e["scanned_at"])[:10]] for name, e in items])
 

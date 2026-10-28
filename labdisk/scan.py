@@ -299,7 +299,7 @@ def current_records(config: Config, share: Share) -> list[dict]:
 def folder_table(config: Config, share: Share) -> dict:
     """Assemble the share's folder table from its latest unit records."""
     owner_uid = uid_of(config.owner)
-    units = {f"{r['mode']}:{r['path']}": r for r in current_records(config, share)}
+    units = current_records(config, share)
     root = str(share.path)
     top: dict[str, dict] = {}
     agg: dict[str, list] = {}
@@ -308,7 +308,7 @@ def folder_table(config: Config, share: Share) -> dict:
     seen_links: set[tuple[int, int]] = set()
     errors = 0
     oldest = None
-    for record in units.values():
+    for record in units:
         alloc, size, files = record["alloc"], record["size"], record["files"]
         for dev, ino, link_alloc, link_size in record["links"]:
             if (dev, ino) in seen_links:
@@ -362,10 +362,11 @@ def folder_table(config: Config, share: Share) -> dict:
         if alloc >= config.min_row_bytes and is_own(folder, share, owner_uid, own_cache):
             rows[folder] = {"path": folder, "alloc": alloc, "size": size, "files": files, "newest": newest}
     layout = read_json(config.results / "scan_state.json", {}).get("layout", {}).get(share.name, [])
-    pending = sum(1 for key in layout if key not in latest_units(config, share))
+    measured = {f"{r['mode']}:{r['path']}" for r in units}
+    pending = sum(1 for key in layout if key not in measured)
     return {"share": share.name, "pending_units": pending, "layout_units": len(layout),
             "top": top, "rows": sorted(rows.values(), key=lambda r: -r["alloc"]),
-            "big": sorted(big, key=lambda b: -b["alloc"]), "units": len(units), "errors": errors,
+            "big": sorted(big, key=lambda b: -b["alloc"]), "errors": errors,
             "oldest_scan": oldest}
 
 
