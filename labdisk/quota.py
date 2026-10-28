@@ -27,6 +27,8 @@ class Reading:
     files: int
     file_soft: int  # 0 means no file-count limit
     file_hard: int
+    owner_used: int | None = None  # bytes the owner's files take on this share, from the same quota system
+    owner_files: int | None = None
 
 
 def read_quota(share: Share) -> Reading:
@@ -46,8 +48,35 @@ def read_quota(share: Share) -> Reading:
                    file_hard=int(files[2]))
 
 
+def owner_usage(owner: str, filesystem: str) -> dict[str, tuple[int, int]]:
+    """The owner's bytes and files in each fileset of one file system: {fileset: (bytes, files)}.
+
+    GPFS tracks every user's usage per fileset as part of quota accounting, so this costs a
+    single `mmlsquota` call. An account may read only its own usage.
+    """
+    args = ["mmlsquota", "-u", owner, "--block-size", "G", filesystem]
+    out = subprocess.run(args, capture_output=True, text=True, timeout=120)
+    if out.returncode != 0:
+        raise RuntimeError(f"{' '.join(args)} failed: {out.stderr.strip() or out.stdout.strip()}")
+    usage = {}
+    for line in out.stdout.splitlines():
+        fields = line.split()
+        if len(fields) > 4 and fields[2] == "USR" and "|" in fields:
+            usage[fields[1]] = (int(fields[3]) * GIB, int(fields[fields.index("|") + 1]))
+    return usage
+
+
 def sample(config: Config) -> list[Reading]:
     readings = [read_quota(share) for share in config.shares if share.quota]
+    by_filesystem: dict[str, dict] = {}
+    for share, reading in zip([s for s in config.shares if s.quota], readings):
+        kind, name, filesystem = share.quota[0], share.quota[1], share.quota[-1]
+        if kind == "-u":  # a per-user quota is the owner's usage already
+            reading.owner_used, reading.owner_files = reading.used, reading.files
+        elif kind == "-j":
+            if filesystem not in by_filesystem:
+                by_filesystem[filesystem] = owner_usage(config.owner, filesystem)
+            reading.owner_used, reading.owner_files = by_filesystem[filesystem].get(name, (0, 0))
     for reading in readings:
         append_jsonl(config.results / "quota.jsonl", asdict(reading))
     return readings

@@ -8,7 +8,9 @@ scan started after the quota is hit can take hours.
 It does two things on a schedule:
 
 - **Every 15 minutes it reads each quota**, which takes under a second, and keeps the
-  history. That history says how fast each share is filling and when it will be full,
+  history. It also records how much of each share is your own files, which the quota
+  system tracks per person, so your total on a share is always current even before or
+  between scans. That history says how fast each share is filling and when it will be full,
   and an email goes out when a share is about to fill.
 - **A slow scan runs continuously in Slurm** and keeps a table of folder sizes. It uses
   a few readers and caps how many files it reads per second, so it puts little load on

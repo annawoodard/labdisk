@@ -57,7 +57,7 @@ def cmd_scan(cfg, args) -> None:
 
 def cmd_status(cfg, args) -> None:
     print("\nQuotas\n")
-    print(report.table(report.QUOTA_HEADER, report.quota_rows(cfg, cfg.shares), text=True))
+    print(report.table(report.quota_header(cfg, True), report.quota_rows(cfg, cfg.shares, True), text=True))
     lines = [w for s in cfg.shares for w in report.warnings(cfg, s, quota.outlook(cfg, s.name))]
     if lines:
         print("\nWarnings\n")

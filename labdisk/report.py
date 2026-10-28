@@ -148,22 +148,28 @@ def first_scan_lines(config: Config, latest: dict, shares: list[Share] | None = 
             + ["", _sentence(eta_text(first_scan_eta(config, latest)))])
 
 
-def quota_rows(config: Config, shares: list[Share]) -> list[list]:
+def quota_header(config: Config, mine: bool) -> list[str]:
+    """The quota table's columns; `mine` adds the owner's own usage, which lab reports leave out."""
+    return (["share", "used"] + ([f"{config.owner}'s files"] if mine else [])
+            + ["soft quota", "hard limit", "left before hard limit", "last hour", "last day", "files"])
+
+
+def quota_rows(config: Config, shares: list[Share], mine: bool) -> list[list]:
     rows = []
     for share in shares:
         look = outlook(config, share.name)
         if not look:
-            rows.append([share.name, "no quota configured" if not share.quota else "no reading yet"] + [""] * 6)
+            rows.append([share.name, "no quota configured" if not share.quota else "no reading yet"]
+                        + [""] * (7 if mine else 6))
             continue
         r = look["reading"]
         files = f"{r.files / 1e6:.2f} M" + (f" of {r.file_hard / 1e6:.2f} M" if r.file_hard else "")
-        rows.append([share.name, size(r.used), size(r.soft), size(r.hard), size(look["left"]),
+        own = [size(r.owner_used)] if mine else []
+        rows.append([share.name, size(r.used)] + own + [size(r.soft), size(r.hard), size(look["left"]),
                      rate(look["per_hour_1h"]), rate(look["per_hour_24h"]), files])
     return rows
 
 
-QUOTA_HEADER = ["share", "used", "soft quota", "hard limit", "left before hard limit", "last hour",
-                "last day", "files"]
 def quota_note() -> str:
     units = ("decimal units (1 TB = 1,000 GB)" if _unit[1] == "TB"
              else "binary units (1 TiB = 1,024 GiB = 1.10 TB)")
@@ -196,7 +202,7 @@ def lab_report(config: Config, share: Share, latest: dict, previous: dict) -> st
              f"`{share.path}` only and is refreshed every 15 minutes; folder sizes come from a slower scan.", ""]
     for w in warnings(config, share, look):
         lines += [f"> **{w}**", ""]
-    lines += ["## Quota", "", quota_note(), "", table(QUOTA_HEADER, quota_rows(config, [share])), ""]
+    lines += ["## Quota", "", quota_note(), "", table(quota_header(config, False), quota_rows(config, [share], False)), ""]
     if t:
         total = sum(e["alloc"] for e in t["top"].values())
         if scan_progress(t):
@@ -220,7 +226,7 @@ def private_report(config: Config, latest: dict, previous: dict, trim: list[dict
     for share in config.shares:
         for w in warnings(config, share, outlook(config, share.name)):
             lines += [f"> **{w}**", ""]
-    lines += ["## Quotas", "", quota_note(), "", table(QUOTA_HEADER, quota_rows(config, config.shares)), ""]
+    lines += ["## Quotas", "", quota_note(), "", table(quota_header(config, True), quota_rows(config, config.shares, True)), ""]
     block = first_scan_lines(config, latest)
     if block:
         lines += ["## First scan in progress: folder totals are incomplete", ""] + block + [""]
