@@ -40,6 +40,7 @@ from .store import append_jsonl, read_json, read_jsonl, write_json
 
 
 RECENT_HOURS = 3  # the scan's pace, for time-left estimates, is measured over this window
+PROGRESS_SECONDS = 300  # how often a running scan rewrites its heartbeat file
 
 
 def uid_of(name: str) -> int:
@@ -225,6 +226,7 @@ def run(config: Config, hours: float, shares: list[str] | None = None) -> bool:
                 todo.append((not own, -age_days, share.name, path, mode, own))
     todo.sort()
     print(f"{len(todo)} units due", flush=True)
+    progress = Progress(len(todo), config.results / "scan_heartbeat.txt")
     with ProcessPoolExecutor(max_workers=config.readers) as pool:
         pending = {}
         queue = iter(todo)
@@ -237,12 +239,14 @@ def run(config: Config, hours: float, shares: list[str] | None = None) -> bool:
                 future = pool.submit(scan_unit, path, mode, own, owner_uid, config.min_row_bytes,
                                      config.big_file_bytes, per_reader)
                 pending[future] = (share_name, path, mode)
+                progress.started(future)
             if not pending:
                 break
-            finished, _ = wait(pending, return_when=FIRST_COMPLETED)
+            finished, _ = wait(pending, timeout=PROGRESS_SECONDS, return_when=FIRST_COMPLETED)
             for future in finished:
                 share_name, path, mode = pending.pop(future)
                 result = future.result()
+                progress.finished(future, share_name, result["files"])
                 result.update(path=path, mode=mode, scanned_at=time.time())
                 append_jsonl(config.results / "units" / f"{share_name}.jsonl", result)
                 if mode == "tree" and result["files"] > config.split_files:
@@ -250,8 +254,59 @@ def run(config: Config, hours: float, shares: list[str] | None = None) -> bool:
                     if path not in state["splits"][share_name]:
                         state["splits"][share_name].append(path)
                         write_json(state_path, state)
+            progress.report(pending)
+    progress.report(pending, force=True)
     compact(config)
     return True
+
+
+class Progress:
+    """Rewrite one heartbeat line every PROGRESS_SECONDS, so a running scan is visibly alive.
+
+    The line replaces the previous one in `scan_heartbeat.txt` instead of piling up in the
+    log. A unit can take hours, so it also says how long the oldest running unit has been
+    going. It names shares only, never folders, because folder names deep inside a share
+    can be patient or exam names.
+    """
+
+    def __init__(self, due: int, path):
+        self.due, self.done, self.files = due, 0, 0
+        self.path = path
+        self.by_share: dict[str, int] = {}
+        self.start = self.last = time.time()
+        self.since: dict = {}
+
+    def started(self, future) -> None:
+        self.since[future] = time.time()
+
+    def finished(self, future, share_name: str, files: int) -> None:
+        self.since.pop(future, None)
+        self.done += 1
+        self.files += files
+        self.by_share[share_name] = self.by_share.get(share_name, 0) + 1
+
+    def report(self, pending: dict, force: bool = False) -> None:
+        now = time.time()
+        if not force and now - self.last < PROGRESS_SECONDS:
+            return
+        self.last = now
+        rate = self.files / max(now - self.start, 1)
+        shares = ", ".join(f"{name} {n:,}" for name, n in sorted(self.by_share.items())) or "none yet"
+        line = (f"Last progress at {time.strftime('%Y-%m-%d %H:%M')} (job {os.environ.get('SLURM_JOB_ID')}): "
+                f"{self.done:,} of {self.due:,} units done ({shares}); "
+                f"{self.files:,} files in finished units, {rate:,.0f} files/s")
+        if pending:
+            oldest = min(pending, key=lambda f: self.since.get(f, now))
+            running = sorted({share for share, _, _ in pending.values()})
+            line += (f"; {len(pending)} running in {', '.join(running)}, oldest for "
+                     f"{(now - self.since.get(oldest, now)) / 60:,.0f} min ({pending[oldest][0]})")
+        else:
+            line += "; scan finished"
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(line + "\n")
+        os.replace(tmp, self.path)
 
 
 def compact(config: Config) -> None:

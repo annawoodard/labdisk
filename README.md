@@ -78,6 +78,11 @@ split into its subfolders on the next one. Each finished piece is saved at once,
 interrupted scan resumes where it stopped. Your folders are rescanned daily and other
 people's weekly.
 
+A running scan rewrites one line in `scan_heartbeat.txt`, in the results folder, every
+5 minutes: pieces done out of pieces due, files read, files per second, and how long the
+oldest running piece has been going. A heartbeat older than 10 minutes while the job is
+running means the scan is stuck.
+
 ## Setup
 
 Written for a GPFS cluster with Slurm: quotas are read with `mmlsquota`, scans run as
