@@ -153,9 +153,11 @@ def cmd_schedule(cfg, args) -> None:
 #SCRON --output={cfg.results}/tick.log --open-mode=append
 */15 * * * * {exe}{config} tick
 
-# labdisk: scan due folders daily, for up to 23 hours with {cfg.readers} readers (one scan at a time).
+# labdisk: start scanning due folders daily, for up to 23 hours with {cfg.readers} readers (one scan at a time).
+# The 7-day limit lets a folder already being read finish: a folder is split into smaller parts
+# only after one full read, so a job killed mid-folder would start that folder over every day.
 #SCRON {where} --job-name=labdisk_scan
-#SCRON --time=23:30:00 --mem=8G --cpus-per-task={cfg.readers}
+#SCRON --time=7-00:00:00 --mem=8G --cpus-per-task={cfg.readers}
 #SCRON --output={cfg.results}/scan-%j.log
 7 1 * * * {exe}{config} scan --hours 23""")
 
