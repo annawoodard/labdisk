@@ -9,6 +9,9 @@ starts a scan.
   labdisk grew --days 7     what grew most over the last 7 days
   labdisk trim              candidates to delete or move, and why (never deletes)
   labdisk report            rewrite the Markdown reports now
+  labdisk layout --out FILE FOLDER...
+                            summarize how data folders are laid out, names replaced by their
+                            shapes, for someone to review (Slurm only; needs no config)
 
 Sizes print in binary units (TiB, GiB) unless your config says otherwise; add --decimal
 (TB, GB) or --binary to any command to choose for one run.
@@ -31,7 +34,7 @@ import textwrap
 import sys
 import time
 
-from . import alert, config as config_mod, quota, report, scan, trim
+from . import alert, config as config_mod, layout, quota, report, scan, trim
 from .report import size, when
 from .store import read_json
 
@@ -136,6 +139,11 @@ def cmd_report(cfg, args) -> None:
         print("wrote", path)
 
 
+def cmd_layout(args) -> None:
+    lines = layout.run(args.folders, args.out, args.readers, args.literal_min_folders, args.max_shapes)
+    print(f"wrote {args.out}: {lines:,} lines")
+
+
 def cmd_init(args) -> None:
     path = config_mod.write_starter(config_mod.Path(args.config))
     print(f"wrote {path}; edit its [[share]] entries, then run `labdisk tick` and `labdisk schedule`")
@@ -199,12 +207,26 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("scan", parents=[common], description="daily job: scan due folders for up to --hours (Slurm only)")
     p.add_argument("--hours", type=float, required=True)
     p.add_argument("--share", action="append", help="limit to these shares")
+    p = sub.add_parser("layout", parents=[common],
+                       description="summarize data folders with every name replaced by its shape (Slurm only)")
+    p.add_argument("folders", nargs="+", help="the data folders to walk, file by file")
+    p.add_argument("--out", required=True, help="the one file to write, readable by you only")
+    p.add_argument("--readers", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "4")),
+                   help="processes reading subfolders (default: the job's CPUs, else 4)")
+    p.add_argument("--literal-min-folders", type=int, default=20,
+                   help="show a name as written only if it appears in this many folders (default: %(default)s)")
+    p.add_argument("--max-shapes", type=int, default=30,
+                   help="most shapes listed under one folder before the rest are summed (default: %(default)s)")
     args = parser.parse_args(argv)
     if args.command == "help":
         parser.print_help()
         return
     if args.command == "init":
         cmd_init(args)
+        return
+    if args.command == "layout":
+        report.use_units(getattr(args, "units", "binary"))
+        cmd_layout(args)
         return
     cfg = config_mod.load(config_mod.Path(args.config))
     report.use_units(getattr(args, "units", cfg.units))

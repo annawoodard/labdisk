@@ -83,11 +83,49 @@ A running scan rewrites one line in `scan_heartbeat.txt`, in the results folder,
 oldest running piece has been going. A heartbeat older than 10 minutes while the job is
 running means the scan is stuck.
 
+## Summarizing data folders whose names are protected
+
+`labdisk layout` walks only the folders you name, file by file, and writes one short
+text file describing how they are laid out, safe for someone to review in place of the
+file names themselves. It is for data folders whose names can identify people:
+patients, exams, dates. The storage scan never records names, and this command writes
+nothing to labdisk's results or reports.
+
+```
+labdisk layout --out /private/path/layout.txt /path/to/data [/path/to/more/data]
+```
+
+Every name is replaced by its shape: `A` for capital letters, `a` for lower-case, `9`
+for digits, `{n}` for n of them. Siblings with the same shape become one line with a
+count, and their contents merge:
+
+```
+/path/to/data/  14,271 folders, 1,203,880 files, 4.12 TiB
+  9{8}/  2,047 folders, 1,203,880 files, 4.12 TiB
+    9{8}/  6,112 folders, 1,203,880 files, 4.12 TiB
+      A{5}/  6,112 folders, 1,203,880 files, 4.12 TiB  (named DICOM in 6,112 folders)
+        A{2}9{5}.a{3}  1,203,880 files, 4.12 TiB  (extension .dcm in 6,112 folders)
+```
+
+A name is shown as written only when it appears in at least 20 different folders
+(`--literal-min-folders`), contains a letter, and has no run of four or more digits,
+so `DICOM` and `T1_pre` appear and patient names, record numbers and dates do not.
+Still, read the result before sharing it. It is used by the `working-with-phi` skill
+in [ai-sci-skills](https://github.com/uchicago-dsi/ai-sci-skills), and needs no labdisk
+configuration. Like the scan, it runs only inside a Slurm job.
+
 ## Setup
 
 Written for a GPFS cluster with Slurm: quotas are read with `mmlsquota`, scans run as
 Slurm jobs, and alerts go out with `mail`. Requires Python 3.11 or newer and nothing
-else.
+else. On RHEL 8, where `python3` is 3.6 and `python3.11` comes without pip, install
+into an environment of its own:
+
+```
+python3.11 -m venv ~/.local/share/labdisk-env
+~/.local/share/labdisk-env/bin/pip install git+https://github.com/annawoodard/labdisk
+ln -s ~/.local/share/labdisk-env/bin/labdisk ~/.local/bin/labdisk
+```
 
 ```
 pip install --user git+https://github.com/annawoodard/labdisk   # or clone and pip install -e .
