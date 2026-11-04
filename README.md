@@ -111,7 +111,8 @@ A name is shown as written only when it appears in at least 20 different folders
 (`--literal-min-folders`), contains a letter, and has no run of four or more digits,
 so `DICOM` and `T1_pre` appear and patient names, record numbers and dates do not.
 Still, read the result before sharing it. `labdisk layout` needs no labdisk
-configuration and, like the scan, runs only inside a Slurm job. The
+configuration. On a Slurm cluster it runs only inside a job, like the scan;
+on a machine without Slurm it runs directly. The
 `working-with-phi` skill in [ai-sci-skills](https://github.com/uchicago-dsi/ai-sci-skills)
 uses it.
 

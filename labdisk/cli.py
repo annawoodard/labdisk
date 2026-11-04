@@ -11,7 +11,7 @@ starts a scan.
   labdisk report            rewrite the Markdown reports now
   labdisk layout --out FILE FOLDER...
                             summarize how data folders are laid out, names replaced by their
-                            shapes, for someone to review (Slurm only; needs no config)
+                            shapes, for someone to review (needs no config)
 
 Sizes print in binary units (TiB, GiB) unless your config says otherwise; add --decimal
 (TB, GB) or --binary to any command to choose for one run.
@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--hours", type=float, required=True)
     p.add_argument("--share", action="append", help="limit to these shares")
     p = sub.add_parser("layout", parents=[common],
-                       description="summarize data folders with every name replaced by its shape (Slurm only)")
+                       description="summarize data folders with every name replaced by its shape (inside a job on Slurm)")
     p.add_argument("folders", nargs="+", help="the data folders to walk, file by file")
     p.add_argument("--out", required=True, help="the one file to write, readable by you only")
     p.add_argument("--readers", type=int, default=int(os.environ.get("SLURM_CPUS_PER_TASK", "4")),

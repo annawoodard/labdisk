@@ -21,13 +21,15 @@ A person reads the result and decides whether it can be released; this produces 
 nothing more. It writes only to the path it is given, readable by its owner only, and
 never into labdisk's results or reports.
 
-Run only inside a Slurm allocation; it walks directory trees.
+On a machine with Slurm it runs only inside a job, because it walks directory
+trees and a login node is shared; elsewhere it runs directly.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
 import stat
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor
@@ -180,8 +182,8 @@ def render(node: dict, depth: int, literal_min: int, max_shapes: int, lines: lis
 
 
 def run(folders: list[str], out: str, readers: int, literal_min: int, max_shapes: int) -> int:
-    if not os.environ.get("SLURM_JOB_ID"):
-        raise SystemExit("labdisk layout walks directory trees; run it inside a Slurm job")
+    if shutil.which("sbatch") and not os.environ.get("SLURM_JOB_ID"):
+        raise SystemExit("labdisk layout walks directory trees; on a Slurm cluster, run it inside a job")
     lines = [
         "# Layout of the data folders named below, with every name replaced by its shape",
         "#",
@@ -196,7 +198,7 @@ def run(folders: list[str], out: str, readers: int, literal_min: int, max_shapes
         root = os.path.realpath(folder)
         node = walk_root(root, readers)
         folders_n, files_n, nbytes = totals(node)
-        lines.append(f"{root}/  {folders_n:,} folders, {files_n:,} files, {size(nbytes)}"
+        lines.append(f"{root}/  {plural(folders_n, 'folder')}, {plural(files_n, 'file')}, {size(nbytes)}"
                      + (f"  ({node['unreadable']:,} unreadable)" if node["unreadable"] else ""))
         render(node, 1, literal_min, max_shapes, lines)
         lines.append("")
