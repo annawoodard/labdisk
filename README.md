@@ -86,7 +86,7 @@ running means the scan is stuck.
 ## Summarizing data folders whose names are protected
 
 `labdisk layout` walks only the folders you name, file by file, and writes one short
-text file describing how they are laid out, safe for someone to review in place of the
+text file describing how they are laid out, for someone to review in place of the
 file names themselves. It is for data folders whose names can identify people:
 patients, exams, dates. The storage scan never records names, and this command writes
 nothing to labdisk's results or reports.
@@ -110,16 +110,17 @@ count, and their contents merge:
 A name is shown as written only when it appears in at least 20 different folders
 (`--literal-min-folders`), contains a letter, and has no run of four or more digits,
 so `DICOM` and `T1_pre` appear and patient names, record numbers and dates do not.
-Still, read the result before sharing it. It is used by the `working-with-phi` skill
-in [ai-sci-skills](https://github.com/uchicago-dsi/ai-sci-skills), and needs no labdisk
-configuration. Like the scan, it runs only inside a Slurm job.
+Still, read the result before sharing it. `labdisk layout` needs no labdisk
+configuration and, like the scan, runs only inside a Slurm job. The
+`working-with-phi` skill in [ai-sci-skills](https://github.com/uchicago-dsi/ai-sci-skills)
+uses it.
 
 ## Setup
 
 Written for a GPFS cluster with Slurm: quotas are read with `mmlsquota`, scans run as
 Slurm jobs, and alerts go out with `mail`. Requires Python 3.11 or newer and nothing
-else. On RHEL 8, where `python3` is 3.6 and `python3.11` comes without pip, install
-into an environment of its own:
+else. On RHEL 8, where `python3` is 3.6 and `python3.11` comes without pip, give
+labdisk its own environment, and use this in place of the `pip install` line below:
 
 ```
 python3.11 -m venv ~/.local/share/labdisk-env
