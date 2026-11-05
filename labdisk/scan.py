@@ -21,7 +21,8 @@ What is kept: totals for every top-level folder; a row for every folder of the o
 holding at least `min_row_bytes`; and the owner's files of at least `big_file_bytes`.
 Smaller folders are folded into their parents, so patient- or exam-level folders,
 which are a few GB each, never become rows. A file with several hard links is counted
-once per unit, and once across the share when the folder table is assembled.
+once per unit, and once across the share when the folder table is assembled; only the
+links that cross units are recorded for that.
 
 Run only inside a Slurm allocation; it walks directory trees.
 """
@@ -65,10 +66,14 @@ class Throttle:
 
 def scan_unit(path: str, mode: str, own_inherited: bool, owner_uid: int, min_row: int, big_file: int,
               per_second: float) -> dict:
-    """Add up one unit. Returns its totals, the owner's rows inside it, big files and hard links."""
+    """Add up one unit. Returns its totals, the owner's rows inside it, big files and hard links.
+
+    The hard links returned are only files with a name outside this unit: a file whose
+    names all lie inside it is counted once here and cannot be counted again elsewhere.
+    """
     throttle = Throttle(per_second)
-    seen: set[tuple[int, int]] = set()
-    links: list[list[int]] = []
+    # (device, inode) -> [device, inode, allocated, apparent, link count, names seen here]
+    seen: dict[tuple[int, int], list[int]] = {}
     rows: list[dict] = []
     big: list[dict] = []
     errors = 0
@@ -77,9 +82,9 @@ def scan_unit(path: str, mode: str, own_inherited: bool, owner_uid: int, min_row
         if st.st_nlink > 1:
             key = (st.st_dev, st.st_ino)
             if key in seen:
+                seen[key][5] += 1
                 return
-            seen.add(key)
-            links.append([st.st_dev, st.st_ino, st.st_blocks * 512, st.st_size])
+            seen[key] = [st.st_dev, st.st_ino, st.st_blocks * 512, st.st_size, st.st_nlink, 1]
         totals[0] += st.st_blocks * 512
         totals[1] += st.st_size
         totals[2] += 1
@@ -128,6 +133,7 @@ def scan_unit(path: str, mode: str, own_inherited: bool, owner_uid: int, min_row
             errors += 1
     else:
         totals = visit(path, own_inherited, recurse=(mode == "tree"))
+    links = [link[:4] for link in seen.values() if link[5] < link[4]]
     return {"alloc": totals[0], "size": totals[1], "files": totals[2], "newest": totals[3], "rows": rows,
             "big": big, "links": links, "errors": errors}
 
@@ -310,12 +316,24 @@ class Progress:
 
 
 def compact(config: Config) -> None:
-    """Keep only the latest record of each unit that still exists in the current layout."""
+    """Keep only the latest record of each unit that still exists in the current layout.
+
+    A hard link listed by only one kept record cannot be counted twice, so it is dropped;
+    a unit holding hundreds of thousands of linked files would otherwise make every record
+    load slow and large.
+    """
     for share in config.shares:
         path = config.results / "units" / f"{share.name}.jsonl"
         if not path.exists():
             continue
         keep, _, _ = current_records(config, share)
+        listed: dict[tuple[int, int], int] = {}
+        for record in keep:
+            for dev, ino, _, _ in record["links"]:
+                listed[(dev, ino)] = listed.get((dev, ino), 0) + 1
+        for record in keep:
+            record["links"] = [link for link in record["links"] if listed[(link[0], link[1])] > 1]
+        del listed
         tmp = path.with_name(path.name + ".tmp")
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as handle:
