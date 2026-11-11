@@ -45,6 +45,11 @@ PROGRESS_SECONDS = 300  # how often a running scan rewrites its heartbeat file
 
 
 def uid_of(name: str) -> int:
+    """The uid for a login name. The scan's own user is answered from the process,
+    because a compute node's directory lookup can fail transiently and a 23-hour
+    scan should not die at its last step on it (job 17632517)."""
+    if name == os.environ.get("USER"):
+        return os.getuid()
     return pwd.getpwnam(name).pw_uid
 
 
