@@ -42,6 +42,10 @@ from .store import append_jsonl, read_json, read_jsonl, write_json
 
 RECENT_HOURS = 3  # the scan's pace, for time-left estimates, is measured over this window
 PROGRESS_SECONDS = 300  # how often a running scan rewrites its heartbeat file
+# Filesystem snapshot folders at a share's top level. Each holds a read-only copy of the
+# whole share per snapshot, so reading them multiplies the scan by the number of
+# snapshots and counts the same files again; their space is not the users' files.
+SNAPSHOT_DIRS = frozenset({".snapshots", ".snapshot"})
 
 
 def uid_of(name: str) -> int:
@@ -163,6 +167,8 @@ def list_units(share: Share, splits: set[str], max_depth: int) -> list[tuple[str
             units.append((folder, "tree"))
 
     for top in children(str(share.path)):
+        if top.name in SNAPSHOT_DIRS:
+            continue
         if top.is_dir(follow_symlinks=False):
             units.append((top.path, "files"))
             for entry in children(top.path):
@@ -223,7 +229,10 @@ def run(config: Config, hours: float, shares: list[str] | None = None) -> bool:
     for share in config.shares:
         if shares and share.name not in shares:
             continue
-        splits = set(state["splits"].get(share.name, []))
+        root = str(share.path).rstrip("/") + "/"
+        state["splits"][share.name] = [p for p in state["splits"].get(share.name, [])
+                                       if p[len(root):].split("/", 1)[0] not in SNAPSHOT_DIRS]
+        splits = set(state["splits"][share.name])
         done = latest_units(config, share)
         own_cache: dict[str, bool] = {}
         layout = list_units(share, splits, config.max_split_depth)
